@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento de Veículos - Secretaria de Educação</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Ícones Modernos -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+</head>
+<body>
+
+    <!-- CABEÇALHO INSTITUCIONAL -->
+    <header class="main-header">
+        <div class="header-container">
+            <div class="logo-area">
+                <span class="material-symbols-outlined icon-logo">directions_car</span>
+                <div>
+                    <h1>Sistema de Agendamento de Veículos</h1>
+                    <h2>Secretaria de Educação</h2>
+                </div>
+            </div>
+            <div class="header-badge">Uso Interno</div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL (DASHBOARD) -->
+    <main class="dashboard-container">
+        
+        <!-- SEÇÃO DE STATUS DOS VEÍCULOS -->
+        <section class="status-section">
+            <div class="card-status" id="card-v1">
+                <div class="card-info">
+                    <h3>Oroch 2</h3>
+                    <p class="status-badge status-available" id="badge-v1">Disponível Agora</p>
+                </div>
+                <span class="material-symbols-outlined card-icon">time_to_leave</span>
+            </div>
+            <div class="card-status" id="card-v2">
+                <div class="card-info">
+                    <h3>Oroch 3</h3>
+                    <p class="status-badge status-available" id="badge-v2">Disponível Agora</p>
+                </div>
+                <span class="material-symbols-outlined card-icon">local_taxi</span>
+            </div>
+        </section>
+
+        <div class="dashboard-grid">
+            
+            <!-- COLUNA DA ESQUERDA: FORMULÁRIO -->
+            <section class="form-section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="material-symbols-outlined">edit_calendar</span>
+                        <h3 id="form-title">Nova Reserva</h3>
+                    </div>
+                    
+                    <form id="schedule-form" autocomplete="off">
+                        <input type="hidden" id="edit-id">
+                        
+                        <div class="form-group">
+                            <label for="driver-name">Nome do Motorista *</label>
+                            <input type="text" id="driver-name" required placeholder="Ex: João Silva">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicle-select">Seleção do Veículo *</label>
+                            <select id="vehicle-select" required>
+                                <option value="" disabled selected>Selecione um veículo...</option>
+                                <option value="Oroch 2">Oroch 2</option>
+                                <option value="Oroch 3">Oroch 3</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="destination">Destino *</label>
+                            <input type="text" id="destination" required placeholder="Ex: Escola Municipal Malba Tahan">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="travel-date">Data do Agendamento *</label>
+                                <input type="date" id="travel-date" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="time-departure">Horário de Saída *</label>
+                                <input type="time" id="time-departure" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="time-return">Horário de Retorno *</label>
+                                <input type="time" id="time-return" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="observation">Observação / Motivo da Viagem</label>
+                            <textarea id="observation" rows="3" placeholder="Detalhes sobre a rota ou finalidade da viagem..."></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" id="btn-cancel-edit" class="btn btn-secondary hidden">Cancelar Edição</button>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="material-symbols-outlined">save</span> Salvar Reserva
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- COLUNA DA DIREITA: CALENDÁRIO VISUAL -->
+            <section class="calendar-section">
+                <div class="panel">
+                    <div class="panel-header">
+                        <span class="material-symbols-outlined">calendar_month</span>
+                        <h3>Calendário Mensal</h3>
+                    </div>
+                    <div class="calendar-wrapper">
+                        <div class="calendar-controls">
+                            <button id="prev-month" class="btn-icon"><span class="material-symbols-outlined">chevron_left</span></button>
+                            <h4 id="calendar-month-year">Janeiro 2026</h4>
+                            <button id="next-month" class="btn-icon"><span class="material-symbols-outlined">chevron_right</span></button>
+                        </div>
+                        <div class="calendar-grid-header">
+                            <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+                        </div>
+                        <div class="calendar-days" id="calendar-days-container">
+                            <!-- Dias gerados via JS -->
+                        </div>
+                    </div>
+                    <div id="day-summary" class="day-summary hidden">
+                        <h4>Agendamentos para o dia <span id="summary-date">--/--/----</span>:</h4>
+                        <ul id="summary-list"></ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- SEÇÃO INFERIOR: PAINEL DE RESERVAS & TABELA -->
+        <section class="table-section">
+            <div class="panel">
+                <div class="panel-header table-panel-header">
+                    <div class="panel-title-group">
+                        <span class="material-symbols-outlined">list_alt</span>
+                        <h3>Painel de Reservas Cadastradas</h3>
+                    </div>
+                    <button id="btn-print" class="btn btn-secondary btn-print">
+                        <span class="material-symbols-outlined">print</span> Imprimir Relatório
+                    </button>
+                </div>
+
+                <!-- BARRA DE FILTROS E BUSCA -->
+                <div class="filter-bar">
+                    <div class="search-input-wrapper">
+                        <span class="material-symbols-outlined search-icon">search</span>
+                        <input type="text" id="search-driver" placeholder="Buscar por motorista...">
+                    </div>
+                    <div class="filter-select-wrapper">
+                        <select id="filter-vehicle">
+                            <option value="todos">Todos os Veículos</option>
+                            <option value="Oroch 2">Oroch 2</option>
+                            <option value="Oroch 3">Oroch 3</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- TABELA -->
+                <div class="table-responsive">
+                    <table id="reservations-table">
+                        <thead>
+                            <tr>
+                                <th>Motorista</th>
+                                <th>Veículo</th>
+                                <th>Destino</th>
+                                <th>Data</th>
+                                <th>Saída</th>
+                                <th>Retorno</th>
+                                <th>Observação</th>
+                                <th class="actions-column">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <!-- Linhas inseridas via JS -->
+                        </tbody>
+                    </table>
+                    <div id="empty-state" class="empty-state hidden">
+                        <span class="material-symbols-outlined">calendar_today</span>
+                        <p>Nenhum agendamento encontrado.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- RODAPÉ INSTITUCIONAL -->
+    <footer class="main-footer">
+        <p>&copy; 2026 Secretaria de Educação - Departamento de Logística e Transportes. Todos os direitos reservados.</p>
+    </footer>
+
+    <!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO -->
+    <div class="modal-overlay" id="delete-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="material-symbols-outlined modal-alert-icon">warning</span>
+                <h3>Confirmar Exclusão</h3>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza de que deseja excluir permanentemente o agendamento do motorista <strong id="modal-driver-name"></strong>?</p>
+                <p class="subtext">Esta ação não poderá ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="btn-modal-cancel">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-modal-confirm">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
