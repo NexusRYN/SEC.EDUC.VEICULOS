@@ -1,7 +1,9 @@
-// CONFIGURAÇÕES INICIAIS E ESTADO GLOBAL
-let reservations = JSON.parse(localStorage.getItem('vehicle_reservations')) || [];
+// RECONEXÃO COM BANCO DE DADOS GOOGLE SHEETS
+const API_URL = "https://script.google.com/macros/s/AKfycbxwaoQrRhtOry9HXm5-qcIj7dQCslo3gQpkpMj0YduNdm9yQee8_3eqGFf1GGpIejfw/exec";
+
+let reservations = [];
 let currentYear = 2026;
-let currentMonth = 4; // Maio (Index 4)
+let currentMonth = 4; // Maio
 let selectedDateStr = null;
 let idToDelete = null;
 
@@ -12,47 +14,54 @@ const formTitle = document.getElementById('form-title');
 const btnCancelEdit = document.getElementById('btn-cancel-edit');
 const tableBody = document.getElementById('table-body');
 const emptyState = document.getElementById('empty-state');
-
-// Elementos do Filtro
 const searchDriver = document.getElementById('search-driver');
 const filterVehicle = document.getElementById('filter-vehicle');
-
-// Elementos do Calendário
 const monthYearLabel = document.getElementById('calendar-month-year');
 const daysContainer = document.getElementById('calendar-days-container');
 const daySummary = document.getElementById('day-summary');
 const summaryDate = document.getElementById('summary-date');
 const summaryList = document.getElementById('summary-list');
 
-// Iniciar a Aplicação
 document.addEventListener('DOMContentLoaded', () => {
-    renderTable();
-    renderCalendar();
-    updateVehicleStatusCards();
+    loadDataFromSheets();
     setupEventListeners();
-    
     document.getElementById('travel-date').value = "2026-05-21";
 });
 
 function setupEventListeners() {
     form.addEventListener('submit', handleFormSubmit);
     btnCancelEdit.addEventListener('click', resetForm);
-    
     searchDriver.addEventListener('input', renderTable);
     filterVehicle.addEventListener('change', renderTable);
-    
     document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1));
     document.getElementById('next-month').addEventListener('click', () => changeMonth(1));
-    
     document.getElementById('btn-print').addEventListener('click', () => window.print());
-    
-    // Modal Events
     document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
     document.getElementById('btn-modal-confirm').addEventListener('click', confirmDelete);
 }
 
-// FORMATADORES E AUXILIARES
+// BUSCAR DADOS DA PLANILHA (EM TEMPO REAL)
+async function loadDataFromSheets() {
+    if(API_URL.includes("COLE_AQUI")) {
+        showToast("Por favor, configure o URL do Google Sheets no script.js", "error");
+        return;
+    }
+    try {
+        const response = await fetch(API_URL);
+        const data = await response.json();
+        // Converter IDs vindos da planilha para formato numérico
+        reservations = data.map(res => ({...res, id: Number(res.id)}));
+        renderTable();
+        renderCalendar();
+        updateVehicleStatusCards();
+    } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+        showToast("Erro ao sincronizar com a base de dados em nuvem.", "error");
+    }
+}
+
 function formatDateBR(dateStr) {
+    if(!dateStr) return "";
     const [year, month, day] = dateStr.split('-');
     return `${day}/${month}/${year}`;
 }
@@ -61,18 +70,14 @@ function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = `toast show ${type}`;
-    setTimeout(() => {
-        toast.className = 'toast hidden';
-    }, 4000);
+    setTimeout(() => { toast.className = 'toast hidden'; }, 4000);
 }
 
-// SISTEMA DE VALIDAÇÃO DE CONFLITOS DE HORÁRIO
 function checkConflict(id, vehicle, date, start, end) {
     const toMinutes = (timeStr) => {
         const [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
     };
-
     const newStart = toMinutes(start);
     const newEnd = toMinutes(end);
 
@@ -87,20 +92,16 @@ function checkConflict(id, vehicle, date, start, end) {
     for (const res of activeConflicts) {
         const existStart = toMinutes(res.departure);
         const existEnd = toMinutes(res.returnTime);
-
         if (newStart < existEnd && newEnd > existStart) {
             return { hasConflict: true, message: "Este veículo já está reservado neste período." };
         }
     }
-
     return { hasConflict: false };
 }
 
-// ATUALIZAR STATUS DOS CARDS (DISPONÍVEL OU OCUPADO AGORA)
 function updateVehicleStatusCards() {
     const simulatedDate = "2026-05-21";
     const simulatedTime = "16:15"; 
-    
     const toMinutes = (timeStr) => {
         const [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
@@ -120,7 +121,6 @@ function updateVehicleStatusCards() {
             }
         }
     });
-
     updateCardDOM("v1", v1Occupied);
     updateCardDOM("v2", v2Occupied);
 }
@@ -128,7 +128,6 @@ function updateVehicleStatusCards() {
 function updateCardDOM(prefix, isOccupied) {
     const card = document.getElementById(`card-${prefix}`);
     const badge = document.getElementById(`badge-${prefix}`);
-    
     if (isOccupied) {
         card.style.borderLeftColor = "var(--danger)";
         badge.className = "status-badge status-occupied";
@@ -140,8 +139,8 @@ function updateCardDOM(prefix, isOccupied) {
     }
 }
 
-// LOGICA DE SUBMISSÃO E PERSISTÊNCIA (CUD)
-function handleFormSubmit(e) {
+// ENVIAR DADOS CRIAÇÃO / EDIÇÃO PARA O GOOGLE SHEETS
+async function handleFormSubmit(e) {
     e.preventDefault();
 
     const id = editIdInput.value ? Number(editIdInput.value) : Date.now();
@@ -154,27 +153,31 @@ function handleFormSubmit(e) {
     const observation = document.getElementById('observation').value.trim();
 
     const conflictCheck = checkConflict(editIdInput.value ? id : null, vehicle, date, departure, returnTime);
-    
     if (conflictCheck.hasConflict) {
         showToast(conflictCheck.message, 'error');
         return;
     }
 
-    const reservationData = { id, driver, vehicle, destination, date, departure, returnTime, observation };
+    const actionType = editIdInput.value ? "update" : "create";
+    const payload = { action: actionType, id, driver, vehicle, destination, date, departure, returnTime, observation };
 
-    if (editIdInput.value) {
-        reservations = reservations.map(res => res.id === id ? reservationData : res);
-        showToast("Agendamento atualizado com sucesso!");
-    } else {
-        reservations.push(reservationData);
-        showToast("Agendamento salvo com sucesso!");
+    showToast("A sincronizar com a nuvem...", "warning");
+
+    try {
+        await fetch(API_URL, {
+            method: "POST",
+            mode: "no-cors", // Necessário para contornar restrições CORS do Google
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        
+        showToast("Agendamento guardado com sucesso!", "success");
+        resetForm();
+        // Recarregar os dados para atualizar a tela global
+        setTimeout(loadDataFromSheets, 1000);
+    } catch (error) {
+        showToast("Erro ao guardar na nuvem.", "error");
     }
-
-    localStorage.setItem('vehicle_reservations', JSON.stringify(reservations));
-    resetForm();
-    renderTable();
-    renderCalendar();
-    updateVehicleStatusCards();
 }
 
 function resetForm() {
@@ -215,31 +218,37 @@ function closeModal() {
     idToDelete = null;
 }
 
-function confirmDelete() {
+// MANDAR ORDEM DE EXCLUSÃO PARA O GOOGLE SHEETS
+async function confirmDelete() {
     if (idToDelete !== null) {
-        reservations = reservations.filter(res => res.id !== idToDelete);
-        localStorage.setItem('vehicle_reservations', JSON.stringify(reservations));
-        showToast("Agendamento excluído com sucesso!", "success");
-        closeModal();
-        renderTable();
-        renderCalendar();
-        updateVehicleStatusCards();
+        showToast("A eliminar da nuvem...", "warning");
+        try {
+            await fetch(API_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "delete", id: idToDelete })
+            });
+            showToast("Agendamento excluído com sucesso!", "success");
+            closeModal();
+            setTimeout(loadDataFromSheets, 1000);
+        } catch (error) {
+            showToast("Erro ao eliminar da nuvem.", "error");
+        }
     }
 }
 
-// RENDERIZAR TABELA COM FILTROS
 function renderTable() {
     const filterText = searchDriver.value.toLowerCase();
     const targetVehicle = filterVehicle.value;
 
     const filtered = reservations.filter(res => {
-        const matchesDriver = res.driver.toLowerCase().includes(filterText);
+        const matchesDriver = res.driver && res.driver.toLowerCase().includes(filterText);
         const matchesVehicle = targetVehicle === 'todos' || res.vehicle === targetVehicle;
         return matchesDriver && matchesVehicle;
     });
 
-    filtered.sort((a, b) => a.date.localeCompare(b.date) || a.departure.localeCompare(b.departure));
-
+    filtered.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.departure).localeCompare(String(b.departure)));
     tableBody.innerHTML = "";
 
     if (filtered.length === 0) {
@@ -250,7 +259,6 @@ function renderTable() {
 
     filtered.forEach(res => {
         const tr = document.createElement('tr');
-        // Mantém classes CSS antigas para não quebrar a estilização visual
         const vehicleClass = res.vehicle === 'Oroch 2' ? 'tag-v1' : 'tag-v2';
 
         tr.innerHTML = `
@@ -276,7 +284,6 @@ function renderTable() {
     });
 }
 
-// RENDERIZAR E CONTROLAR CALENDÁRIO VISUAL
 const monthsBR = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 function renderCalendar() {
@@ -302,15 +309,12 @@ function renderCalendar() {
 
         dayDiv.innerHTML = `<span>${day}</span>`;
 
-        if (dateString === "2026-05-21") {
-            dayDiv.classList.add('today');
-        }
+        if (dateString === "2026-05-21") dayDiv.classList.add('today');
 
         const dayReservations = reservations.filter(res => res.date === dateString);
         
         if (dayReservations.length > 0) {
             dayDiv.classList.add('occupied');
-            
             const dotsContainer = document.createElement('div');
             dotsContainer.className = 'day-dots';
             
@@ -319,7 +323,6 @@ function renderCalendar() {
             
             if (v1Has) dotsContainer.innerHTML += '<span class="dot dot-v1"></span>';
             if (v2Has) dotsContainer.innerHTML += '<span class="dot dot-v2"></span>';
-            
             dayDiv.appendChild(dotsContainer);
         }
 
@@ -334,20 +337,14 @@ function renderCalendar() {
             selectedDateStr = dateString;
             showDaySummary(dateString, dayReservations);
         });
-
         daysContainer.appendChild(dayDiv);
     }
 }
 
 function changeMonth(direction) {
     currentMonth += direction;
-    if (currentMonth > 11) {
-        currentMonth = 0;
-        currentYear++;
-    } else if (currentMonth < 0) {
-        currentMonth = 11;
-        currentYear--;
-    }
+    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+    else if (currentMonth < 0) { currentMonth = 11; currentYear--; }
     renderCalendar();
 }
 
@@ -361,7 +358,7 @@ function showDaySummary(dateStr, dayReservations) {
         return;
     }
 
-    dayReservations.sort((a,b) => a.departure.localeCompare(b.departure)).forEach(res => {
+    dayReservations.sort((a,b) => String(a.departure).localeCompare(String(b.departure))).forEach(res => {
         const li = document.createElement('li');
         li.innerHTML = `
             <span><strong>${res.departure} - ${res.returnTime}</strong>: ${res.vehicle}</span>
