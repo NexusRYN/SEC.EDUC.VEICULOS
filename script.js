@@ -2,8 +2,11 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbxwaoQrRhtOry9HXm5-qcIj7dQCslo3gQpkpMj0YduNdm9yQee8_3eqGFf1GGpIejfw/exec";
 
 let reservations = [];
-let currentYear = 2026;
-let currentMonth = 4; // Maio
+
+// CAPTURA AUTOMÁTICA DA DATA ATUAL REAL DO SISTEMA AO ABRIR O SITE
+const hoje = new Date();
+let currentYear = hoje.getFullYear();
+let currentMonth = hoje.getMonth(); // Define o mês atual automaticamente (0 = Jan, 1 = Fev, etc.)
 let selectedDateStr = null;
 let idToDelete = null;
 
@@ -23,8 +26,7 @@ const summaryDate = document.getElementById('summary-date');
 const summaryList = document.getElementById('summary-list');
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Define o input de data do formulário para o dia atual real automaticamente
-    const hoje = new Date();
+    // Define o input de data do formulário para o dia de hoje automaticamente
     const ano = hoje.getFullYear();
     const mes = String(hoje.getMonth() + 1).padStart(2, '0');
     const dia = String(hoje.getDate()).padStart(2, '0');
@@ -48,10 +50,6 @@ function setupEventListeners() {
 
 // BUSCAR DADOS DA PLANILHA (EM TEMPO REAL)
 async function loadDataFromSheets() {
-    if(API_URL.includes("COLE_AQUI")) {
-        showToast("Por favor, configure o URL do Google Sheets no script.js", "error");
-        return;
-    }
     try {
         const response = await fetch(API_URL);
         const data = await response.json();
@@ -105,7 +103,7 @@ function checkConflict(id, vehicle, date, start, end) {
     return { hasConflict: false };
 }
 
-// ATUALIZAR STATUS DOS CARDS (DISPONÍVEL OU OCUPADO AGORA - EM TEMPO REAL)
+// ATUALIZAR STATUS DOS CARDS EM TEMPO REAL COM A DATA DE HOJE
 function updateVehicleStatusCards() {
     const agora = new Date();
     
@@ -201,6 +199,13 @@ function resetForm() {
     editIdInput.value = "";
     formTitle.textContent = "Nova Reserva";
     btnCancelEdit.classList.add('hidden');
+    
+    // Mantém a data de hoje ativa após limpar o formulário
+    const d = new Date();
+    const ano = d.getFullYear();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    document.getElementById('travel-date').value = `${ano}-${mes}-${dia}`;
 }
 
 function editReservation(id) {
@@ -234,7 +239,6 @@ function closeModal() {
     idToDelete = null;
 }
 
-// MANDAR ORDEM DE EXCLUSÃO PARA O GOOGLE SHEETS
 async function confirmDelete() {
     if (idToDelete !== null) {
         showToast("A eliminar da nuvem...", "warning");
@@ -306,10 +310,10 @@ function renderCalendar() {
     monthYearLabel.textContent = `${monthsBR[currentMonth]} ${currentYear}`;
     daysContainer.innerHTML = "";
 
-    const hoje = new Date();
-    const hojeAno = hoje.getFullYear();
-    const hojeMes = hoje.getMonth();
-    const hojeDia = hoje.getDate();
+    const hojeReal = new Date();
+    const hojeAno = hojeReal.getFullYear();
+    const hojeMes = hojeReal.getMonth();
+    const hojeDia = hojeReal.getDate();
 
     const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
     const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
