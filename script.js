@@ -200,7 +200,7 @@ function resetForm() {
     formTitle.textContent = "Nova Reserva";
     btnCancelEdit.classList.add('hidden');
     
-    // Mantém a data de hoje ativa após limpar o formulário
+    // Mantém a data de hoje activa após limpar o formulário
     const d = new Date();
     const ano = d.getFullYear();
     const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -395,3 +395,12 @@ function showDaySummary(dateStr, dayReservations) {
         summaryList.appendChild(li);
     });
 }
+
+// ATUALIZAÇÃO AUTOMÁTICA EM TEMPO REAL (SEM RECARREGAR A PÁGINA)
+// Executa a busca de dados na planilha a cada 15 segundos
+setInterval(() => {
+    // Só sincroniza se o usuário não estiver editando um formulário no momento
+    if (!editIdInput.value) {
+        loadDataFromSheets();
+    }
+}, 15000);
