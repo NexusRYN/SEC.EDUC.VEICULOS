@@ -99,47 +99,30 @@ function checkConflict(id, vehicle, date, start, end) {
     return { hasConflict: false };
 }
 
-// ATUALIZAR STATUS DOS CARDS (DISPONÍVEL OU OCUPADO AGORA - EM TEMPO REAL)
 function updateVehicleStatusCards() {
-    // Captura a data e o horário real do computador do funcionário
-    const agora = new Date();
-    
-    const ano = agora.getFullYear();
-    const mes = String(agora.getMonth() + 1).padStart(2, '0');
-    const dia = String(agora.getDate()).padStart(2, '0');
-    const dataAtualReal = `${ano}-${mes}-${dia}`; // Formato AAAA-MM-DD
-    
-    const horas = String(agora.getHours()).padStart(2, '0');
-    const minutos = String(agora.getMinutes()).padStart(2, '0');
-    const horarioAtualReal = `${horas}:${minutos}`; // Formato HH:MM
-    
+    const simulatedDate = "2026-05-21";
+    const simulatedTime = "16:15"; 
     const toMinutes = (timeStr) => {
-        if (!timeStr || !timeStr.includes(':')) return 0;
         const [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
     };
-    const nowMin = toMinutes(horarioAtualReal);
+    const nowMin = toMinutes(simulatedTime);
 
     let v1Occupied = false;
     let v2Occupied = false;
 
     reservations.forEach(res => {
-        // Verifica se o agendamento coincide exatamente com o dia de hoje
-        if (res.date === dataAtualReal) {
+        if (res.date === simulatedDate) {
             const start = toMinutes(res.departure);
             const end = toMinutes(res.returnTime);
-            
-            // Se o horário de agora estiver entre o horário de saída e retorno
             if (nowMin >= start && nowMin <= end) {
                 if (res.vehicle === "Oroch 2") v1Occupied = true;
                 if (res.vehicle === "Oroch 3") v2Occupied = true;
             }
         }
     });
-
     updateCardDOM("v1", v1Occupied);
     updateCardDOM("v2", v2Occupied);
-}
 }
 
 function updateCardDOM(prefix, isOccupied) {
