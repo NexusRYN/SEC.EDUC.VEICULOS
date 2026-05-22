@@ -23,9 +23,15 @@ const summaryDate = document.getElementById('summary-date');
 const summaryList = document.getElementById('summary-list');
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Define o input de data do formulário para o dia atual real automaticamente
+    const hoje = new Date();
+    const ano = hoje.getFullYear();
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoje.getDate()).padStart(2, '0');
+    document.getElementById('travel-date').value = `${ano}-${mes}-${dia}`;
+
     loadDataFromSheets();
     setupEventListeners();
-    document.getElementById('travel-date').value = "2026-05-21";
 });
 
 function setupEventListeners() {
@@ -99,20 +105,31 @@ function checkConflict(id, vehicle, date, start, end) {
     return { hasConflict: false };
 }
 
+// ATUALIZAR STATUS DOS CARDS (DISPONÍVEL OU OCUPADO AGORA - EM TEMPO REAL)
 function updateVehicleStatusCards() {
-    const simulatedDate = "2026-05-21";
-    const simulatedTime = "16:15"; 
+    const agora = new Date();
+    
+    const ano = agora.getFullYear();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    const dia = String(agora.getDate()).padStart(2, '0');
+    const dataAtualReal = `${ano}-${mes}-${dia}`;
+    
+    const horas = String(agora.getHours()).padStart(2, '0');
+    const minutos = String(agora.getMinutes()).padStart(2, '0');
+    const horarioAtualReal = `${horas}:${minutos}`;
+    
     const toMinutes = (timeStr) => {
+        if (!timeStr || !timeStr.includes(':')) return 0;
         const [h, m] = timeStr.split(':').map(Number);
         return h * 60 + m;
     };
-    const nowMin = toMinutes(simulatedTime);
+    const nowMin = toMinutes(horarioAtualReal);
 
     let v1Occupied = false;
     let v2Occupied = false;
 
     reservations.forEach(res => {
-        if (res.date === simulatedDate) {
+        if (res.date === dataAtualReal) {
             const start = toMinutes(res.departure);
             const end = toMinutes(res.returnTime);
             if (nowMin >= start && nowMin <= end) {
@@ -166,14 +183,13 @@ async function handleFormSubmit(e) {
     try {
         await fetch(API_URL, {
             method: "POST",
-            mode: "no-cors", // Necessário para contornar restrições CORS do Google
+            mode: "no-cors",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
         
         showToast("Agendamento guardado com sucesso!", "success");
         resetForm();
-        // Recarregar os dados para atualizar a tela global
         setTimeout(loadDataFromSheets, 1000);
     } catch (error) {
         showToast("Erro ao guardar na nuvem.", "error");
@@ -290,6 +306,11 @@ function renderCalendar() {
     monthYearLabel.textContent = `${monthsBR[currentMonth]} ${currentYear}`;
     daysContainer.innerHTML = "";
 
+    const hoje = new Date();
+    const hojeAno = hoje.getFullYear();
+    const hojeMes = hoje.getMonth();
+    const hojeDia = hoje.getDate();
+
     const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
     const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
@@ -309,7 +330,10 @@ function renderCalendar() {
 
         dayDiv.innerHTML = `<span>${day}</span>`;
 
-        if (dateString === "2026-05-21") dayDiv.classList.add('today');
+        // Destaca dinamicamente o dia de hoje real no calendário
+        if (day === hojeDia && currentMonth === hojeMes && currentYear === hojeAno) {
+            dayDiv.classList.add('today');
+        }
 
         const dayReservations = reservations.filter(res => res.date === dateString);
         
