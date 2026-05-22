@@ -46,6 +46,20 @@ function setupEventListeners() {
     document.getElementById('btn-print').addEventListener('click', () => window.print());
     document.getElementById('btn-modal-cancel').addEventListener('click', closeModal);
     document.getElementById('btn-modal-confirm').addEventListener('click', confirmDelete);
+
+    // CORREÇÃO PARA CELULARES: Atualiza os dados assim que o usuário volta para a aba ou liga a tela do celular
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && !editIdInput.value) {
+            console.log("Usuário voltou para o site (Celular/PC). Atualizando dados...");
+            loadDataFromSheets();
+        }
+    });
+    
+    window.addEventListener('focus', () => {
+        if (!editIdInput.value) {
+            loadDataFromSheets();
+        }
+    });
 }
 
 // BUSCAR DADOS DA PLANILHA (EM TEMPO REAL)
@@ -113,8 +127,8 @@ function updateVehicleStatusCards() {
     const dataAtualReal = `${ano}-${mes}-${dia}`;
     
     const horas = String(agora.getHours()).padStart(2, '0');
-    const minutos = String(agora.getMinutes()).padStart(2, '0');
-    const horarioAtualReal = `${horas}:${minutos}`;
+    const minutes = String(agora.getMinutes()).padStart(2, '0');
+    const horarioAtualReal = `${horas}:${minutes}`;
     
     const toMinutes = (timeStr) => {
         if (!timeStr || !timeStr.includes(':')) return 0;
