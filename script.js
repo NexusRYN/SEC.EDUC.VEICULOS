@@ -72,6 +72,7 @@ async function loadDataFromSheets() {
         renderTable();
         renderCalendar();
         updateVehicleStatusCards();
+        autoCleanExpiredReservations(); // Executa a faxina automática sempre que carregar dados
     } catch (error) {
         console.error("Erro ao carregar dados:", error);
         showToast("Erro ao sincronizar com a base de dados em nuvem.", "error");
@@ -79,9 +80,35 @@ async function loadDataFromSheets() {
 }
 
 function formatDateBR(dateStr) {
-    if(!dateStr) return "";
-    const [year, month, day] = dateStr.split('-');
-    return `${day}/${month}/${year}`;
+    if (!dateStr) return "";
+    
+    // Se a planilha mandar algo como "22T04:00:00.000Z/05/2026"
+    if (dateStr.includes('T') && dateStr.includes('/')) {
+        const partes = dateStr.split('/');
+        const dia = partes[0].split('T')[0];
+        const mes = partes[1];
+        const ano = partes[2];
+        return `${dia}/${mes}/${ano}`;
+    }
+    
+    // Se vier no formato padrão "YYYY-MM-DD"
+    if (dateStr.includes('-')) {
+        const [year, month, day] = dateStr.split('T')[0].split('-');
+        return `${day}/${month}/${year}`;
+    }
+    
+    return dateStr;
+}
+
+// Função auxiliar para limpar e padronizar a exibição das horas na tabela
+function formatTimeClean(timeStr) {
+    if (!timeStr) return "";
+    if (timeStr.includes('T')) {
+        const horarioCompleto = timeStr.split('T')[1];
+        const [hora, minuto] = horarioCompleto.split(':');
+        return `${hora}:${minuto}`;
+    }
+    return timeStr;
 }
 
 function showToast(message, type = 'success') {
@@ -132,7 +159,8 @@ function updateVehicleStatusCards() {
     
     const toMinutes = (timeStr) => {
         if (!timeStr || !timeStr.includes(':')) return 0;
-        const [h, m] = timeStr.split(':').map(Number);
+        const cleanTime = timeStr.includes('T') ? timeStr.split('T')[1] : timeStr;
+        const [h, m] = cleanTime.split(':').map(Number);
         return h * 60 + m;
     };
     const nowMin = toMinutes(horarioAtualReal);
@@ -141,7 +169,8 @@ function updateVehicleStatusCards() {
     let v2Occupied = false;
 
     reservations.forEach(res => {
-        if (res.date === dataAtualReal) {
+        const dataRes = res.date && res.date.includes('T') ? res.date.split('T')[0] : res.date;
+        if (dataRes === dataAtualReal) {
             const start = toMinutes(res.departure);
             const end = toMinutes(res.returnTime);
             if (nowMin >= start && nowMin <= end) {
@@ -165,6 +194,65 @@ function updateCardDOM(prefix, isOccupied) {
         card.style.borderLeftColor = "var(--success)";
         badge.className = "status-badge status-available";
         badge.textContent = "Disponível Agora";
+    }
+}
+
+// FUNÇÃO QUE DETECTA E EXCLUI AGENDAMENTOS EXPIRADOS AUTOMATICAMENTE
+async function autoCleanExpiredReservations() {
+    // Se o usuário estiver editando um registro agora, cancela a faxina para não atrapalhar
+    if (editIdInput.value) return;
+
+    const agora = new Date();
+    
+    const ano = agora.getFullYear();
+    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+    const dia = String(agora.getDate()).padStart(2, '0');
+    const dataAtualReal = `${ano}-${mes}-${dia}`;
+    
+    const horas = String(agora.getHours()).padStart(2, '0');
+    const minutos = String(agora.getMinutes()).padStart(2, '0');
+    const horarioAtualReal = `${horas}:${minutos}`;
+    
+    const toMinutes = (timeStr) => {
+        if (!timeStr || !timeStr.includes(':')) return 0;
+        const cleanTime = timeStr.includes('T') ? timeStr.split('T')[1] : timeStr;
+        const [h, m] = cleanTime.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const agoraEmMinutos = toMinutes(horarioAtualReal);
+
+    // Faz um loop reverso para poder remover itens sem quebrar o índice do array
+    for (let i = reservations.length - 1; i >= 0; i--) {
+        const res = reservations[i];
+        const dataRes = res.date && res.date.includes('T') ? res.date.split('T')[0] : res.date;
+        
+        const ehDiaAnterior = String(dataRes).localeCompare(dataAtualReal) < 0;
+        const ehHojeEJaPassou = (dataRes === dataAtualReal && toMinutes(res.returnTime) <= agoraEmMinutos);
+
+        if (ehDiaAnterior || ehHojeEJaPassou) {
+            console.log(`Faxina: Agendamento ID ${res.id} de ${res.driver} expirou.`);
+            
+            try {
+                // Envia comando de exclusão para o Google Sheets
+                await fetch(API_URL, {
+                    method: "POST",
+                    mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "delete", id: res.id })
+                });
+                
+                showToast(`Agendamento de ${res.driver} concluído e removido automaticamente.`, "success");
+                
+                // Remove localmente para sumir da tela instantaneamente
+                reservations.splice(i, 1);
+                renderTable();
+                renderCalendar();
+                updateVehicleStatusCards();
+            } catch (error) {
+                console.error("Erro na faxina automática:", error);
+            }
+        }
     }
 }
 
@@ -214,7 +302,6 @@ function resetForm() {
     formTitle.textContent = "Nova Reserva";
     btnCancelEdit.classList.add('hidden');
     
-    // Mantém a data de hoje activa após limpar o formulário
     const d = new Date();
     const ano = d.getFullYear();
     const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -226,13 +313,16 @@ function editReservation(id) {
     const res = reservations.find(r => r.id === id);
     if (!res) return;
 
+    // Extrai apenas o formato YYYY-MM-DD limpo caso venha do Sheets com 'T'
+    const cleanDate = res.date && res.date.includes('T') ? res.date.split('T')[0] : res.date;
+
     editIdInput.value = res.id;
     document.getElementById('driver-name').value = res.driver;
     document.getElementById('vehicle-select').value = res.vehicle;
     document.getElementById('destination').value = res.destination;
-    document.getElementById('travel-date').value = res.date;
-    document.getElementById('time-departure').value = res.departure;
-    document.getElementById('time-return').value = res.returnTime;
+    document.getElementById('travel-date').value = cleanDate;
+    document.getElementById('time-departure').value = formatTimeClean(res.departure);
+    document.getElementById('time-return').value = formatTimeClean(res.returnTime);
     document.getElementById('observation').value = res.observation;
 
     formTitle.textContent = "Editar Agendamento";
@@ -300,8 +390,8 @@ function renderTable() {
             <td><span class="vehicle-tag ${vehicleClass}">${res.vehicle}</span></td>
             <td title="${res.destination}">${res.destination}</td>
             <td>${formatDateBR(res.date)}</td>
-            <td>${res.departure}</td>
-            <td>${res.returnTime}</td>
+            <td>${formatTimeClean(res.departure)}</td>
+            <td>${formatTimeClean(res.returnTime)}</td>
             <td title="${res.observation || ''}">${res.observation || '<span style="color:#cbd5e1; font-style:italic;">Sem obs</span>'}</td>
             <td class="actions-column">
                 <div class="table-actions">
@@ -348,12 +438,14 @@ function renderCalendar() {
 
         dayDiv.innerHTML = `<span>${day}</span>`;
 
-        // Destaca dinamicamente o dia de hoje real no calendário
         if (day === hojeDia && currentMonth === hojeMes && currentYear === hojeAno) {
             dayDiv.classList.add('today');
         }
 
-        const dayReservations = reservations.filter(res => res.date === dateString);
+        const dayReservations = reservations.filter(res => {
+            const cleanDate = res.date && res.date.includes('T') ? res.date.split('T')[0] : res.date;
+            return cleanDate === dateString;
+        });
         
         if (dayReservations.length > 0) {
             dayDiv.classList.add('occupied');
@@ -403,7 +495,7 @@ function showDaySummary(dateStr, dayReservations) {
     dayReservations.sort((a,b) => String(a.departure).localeCompare(String(b.departure))).forEach(res => {
         const li = document.createElement('li');
         li.innerHTML = `
-            <span><strong>${res.departure} - ${res.returnTime}</strong>: ${res.vehicle}</span>
+            <span><strong>${formatTimeClean(res.departure)} - ${formatTimeClean(res.returnTime)}</strong>: ${res.vehicle}</span>
             <span style="color:var(--text-muted); font-size:0.8rem;">Motorista: ${res.driver}</span>
         `;
         summaryList.appendChild(li);
@@ -411,9 +503,8 @@ function showDaySummary(dateStr, dayReservations) {
 }
 
 // ATUALIZAÇÃO AUTOMÁTICA EM TEMPO REAL (SEM RECARREGAR A PÁGINA)
-// Executa a busca de dados na planilha a cada 15 segundos
+// Executa a busca de dados na planilha e a faxina de expirados a cada 15 segundos
 setInterval(() => {
-    // Só sincroniza se o usuário não estiver editando um formulário no momento
     if (!editIdInput.value) {
         loadDataFromSheets();
     }
